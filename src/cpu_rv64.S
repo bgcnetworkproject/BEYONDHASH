@@ -1,5 +1,6 @@
 /*
-Copyright (c) 2018-2019, tevador <tevador@gmail.com>
+Copyright (c) 2018-2020, tevador    <tevador@gmail.com>
+Copyright (c) 2025, SChernykh       <https://github.com/SChernykh>
 
 All rights reserved.
 
@@ -26,33 +27,21 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#pragma once
+.text
+.option arch, rv64gcv_zvkned
+.global rv64_test_vector
+.global rv64_test_vector_aes
 
-#include <stdint.h>
-#include "intrin_portable.h"
+// Returns vector register length (in bits)
+rv64_test_vector:
+	li x10, 1024
+	vsetvli x10, x10, e64, m1, ta, ma
+	slli x10, x10, 6
+	ret
 
-extern const uint32_t lutEnc0[256];
-extern const uint32_t lutEnc1[256];
-extern const uint32_t lutEnc2[256];
-extern const uint32_t lutEnc3[256];
-extern const uint32_t lutDec0[256];
-extern const uint32_t lutDec1[256];
-extern const uint32_t lutDec2[256];
-extern const uint32_t lutDec3[256];
-
-extern const uint8_t lutEncIndex[4][32];
-extern const uint8_t lutDecIndex[4][32];
-
-rx_vec_i128 soft_aesenc(rx_vec_i128 in, rx_vec_i128 key);
-
-rx_vec_i128 soft_aesdec(rx_vec_i128 in, rx_vec_i128 key);
-
-template<bool soft>
-inline rx_vec_i128 aesenc(rx_vec_i128 in, rx_vec_i128 key) {
-	return soft ? soft_aesenc(in, key) : rx_aesenc_vec_i128(in, key);
-}
-
-template<bool soft>
-inline rx_vec_i128 aesdec(rx_vec_i128 in, rx_vec_i128 key) {
-	return soft ? soft_aesdec(in, key) : rx_aesdec_vec_i128(in, key);
-}
+rv64_test_vector_aes:
+	vsetivli zero, 8, e32, m1, ta, ma
+	vaesem.vv v0, v0
+	vaesdm.vv v0, v0
+	li x10, 0
+	ret

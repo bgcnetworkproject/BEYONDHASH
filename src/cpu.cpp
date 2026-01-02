@@ -46,9 +46,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	#include <asm/hwcap.h>
 #endif
 
+#ifdef __riscv
+#include <signal.h>
+#include <setjmp.h>
+#include <cstdint>
+
+extern "C" uint64_t rv64_test_vector();
+extern "C" uint64_t rv64_test_vector_aes();
+
+static sigjmp_buf jump_buffer;
+static void sigill_handler(int) { siglongjmp(jump_buffer, 1); }
+#endif
+
 namespace randomx {
 
-	Cpu::Cpu() : aes_(false), ssse3_(false), avx2_(false) {
+	Cpu::Cpu()
+	{
 #ifdef HAVE_CPUID
 		int info[4];
 		cpuid(info, 0);
@@ -69,8 +82,32 @@ namespace randomx {
 	#elif defined(__APPLE__)
 		aes_ = true;
 	#endif
+#elif defined(__riscv)
+		struct sigaction new_action, old_action;
+
+		new_action.sa_handler = sigill_handler;
+		sigemptyset(&new_action.sa_mask);
+		new_action.sa_flags = 0;
+
+		if (sigaction(SIGILL, &new_action, &old_action) == 0) {
+			if (sigsetjmp(jump_buffer, 1) == 0) {
+				rvv_length = static_cast<int>(rv64_test_vector());
+				// If execution gets here, vector instructions executed successfully
+				rvv_ = true;
+			}
+
+			if (sigsetjmp(jump_buffer, 1) == 0) {
+				if (rv64_test_vector_aes() == 0) {
+					// If execution gets here, vector AES instructions executed successfully
+					aes_ = true;
+				}
+			}
+
+			sigaction(SIGILL, &old_action, nullptr);
+		}
 #endif
 		//TODO POWER8 AES
 	}
 
+	const Cpu cpu;
 }

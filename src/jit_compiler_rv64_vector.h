@@ -1,5 +1,6 @@
 /*
-Copyright (c) 2018-2019, tevador <tevador@gmail.com>
+Copyright (c) 2018-2020, tevador    <tevador@gmail.com>
+Copyright (c) 2025, SChernykh       <https://github.com/SChernykh>
 
 All rights reserved.
 
@@ -28,31 +29,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include <stdint.h>
-#include "intrin_portable.h"
+#include <cstdint>
+#include <cstdlib>
+#include <vector>
 
-extern const uint32_t lutEnc0[256];
-extern const uint32_t lutEnc1[256];
-extern const uint32_t lutEnc2[256];
-extern const uint32_t lutEnc3[256];
-extern const uint32_t lutDec0[256];
-extern const uint32_t lutDec1[256];
-extern const uint32_t lutDec2[256];
-extern const uint32_t lutDec3[256];
+namespace randomx {
 
-extern const uint8_t lutEncIndex[4][32];
-extern const uint8_t lutDecIndex[4][32];
+class SuperscalarProgram;
+struct ProgramConfiguration;
+class Program;
 
-rx_vec_i128 soft_aesenc(rx_vec_i128 in, rx_vec_i128 key);
+void* generateDatasetInitVectorRV64(uint8_t* buf, SuperscalarProgram* programs, size_t num_programs, std::vector<uint64_t>& reciprocalCache);
+void* generateProgramVectorRV64(uint8_t* buf, Program& prog, ProgramConfiguration& pcfg, const uint8_t (&inst_map)[256], void* entryDataInitScalar, uint32_t datasetOffset);
 
-rx_vec_i128 soft_aesdec(rx_vec_i128 in, rx_vec_i128 key);
-
-template<bool soft>
-inline rx_vec_i128 aesenc(rx_vec_i128 in, rx_vec_i128 key) {
-	return soft ? soft_aesenc(in, key) : rx_aesenc_vec_i128(in, key);
-}
-
-template<bool soft>
-inline rx_vec_i128 aesdec(rx_vec_i128 in, rx_vec_i128 key) {
-	return soft ? soft_aesdec(in, key) : rx_aesdec_vec_i128(in, key);
-}
+} // namespace randomx
