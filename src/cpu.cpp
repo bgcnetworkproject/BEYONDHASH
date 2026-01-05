@@ -27,6 +27,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "cpu.hpp"
+#include <cstring>
 
 #if defined(_M_X64) || defined(__x86_64__)
 	#define HAVE_CPUID
@@ -56,6 +57,8 @@ extern "C" uint64_t rv64_test_vector_aes();
 
 static sigjmp_buf jump_buffer;
 static void sigill_handler(int) { siglongjmp(jump_buffer, 1); }
+
+void hashAes1Rx4_zvkned(const void *input, size_t inputSize, void *hash);
 #endif
 
 namespace randomx {
@@ -99,7 +102,19 @@ namespace randomx {
 			if (sigsetjmp(jump_buffer, 1) == 0) {
 				if (rv64_test_vector_aes() == 0) {
 					// If execution gets here, vector AES instructions executed successfully
-					aes_ = true;
+					// Now need to check that they actually do what they're supposed to do
+
+					uint64_t input[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+					uint64_t hash[8] = {};
+
+					static constexpr uint64_t ref_hash[8] = {
+						0x195268637f56cab0ull, 0xdf7d7d3553e9e1d1ull, 0x3067fb6e5efcbee2ull, 0xfab778b414feaf77ull,
+						0x99905a5000820817ull, 0xae359bff2379ff97ull, 0x0d87373e6505c4c3ull, 0xf3f5cffd57f2dd62ull
+					};
+
+					hashAes1Rx4_zvkned(input, sizeof(input), hash);
+
+					aes_ = (memcmp(hash, ref_hash, sizeof(hash)) == 0);
 				}
 			}
 

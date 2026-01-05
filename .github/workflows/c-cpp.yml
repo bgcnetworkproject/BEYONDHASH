@@ -20,7 +20,7 @@ jobs:
           - {arch: armhf, branch: latest-stable}
           - {arch: armv7, branch: latest-stable}
           - {arch: ppc64le, branch: latest-stable}
-          - {arch: riscv64, branch: edge}
+          - {arch: riscv64, branch: latest-stable}
           - {arch: s390x, branch: latest-stable}
 
     steps:
@@ -45,7 +45,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        cmake ..
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DARCH=native
         make -j$(nproc)
 
     - name: Run tests
@@ -61,8 +61,7 @@ jobs:
     strategy:
       matrix:
         config:
-          - {os: ubuntu-20.04, c: gcc-11, cpp: g++-11}
-          - {os: ubuntu-22.04, c: gcc-12, cpp: g++-12}
+          - {os: ubuntu-24.04, c: gcc-14, cpp: g++-14}
 
     steps:
     - name: Install dependencies
@@ -165,7 +164,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-13, macos-14, macos-15]
+        os: [macos-14, macos-15]
 
     steps:
     - name: Checkout repository
@@ -197,13 +196,13 @@ jobs:
         os:
           - name: freebsd
             architecture: x86-64
-            version: '13.2'
-            host: ubuntu-22.04
+            version: '13.3'
+            host: ubuntu-latest
 
           - name: freebsd
             architecture: arm64
-            version: '13.2'
-            host: ubuntu-22.04
+            version: '13.3'
+            host: ubuntu-latest
 
     steps:
     - name: Checkout repository
@@ -212,11 +211,13 @@ jobs:
         submodules: recursive
 
     - name: Build RandomX
-      uses: cross-platform-actions/action@v0.19.0
+      uses: cross-platform-actions/action@v0.24.0
       with:
         operating_system: ${{ matrix.os.name }}
         architecture: ${{ matrix.os.architecture }}
         version: ${{ matrix.os.version }}
+        memory: 12G
+        cpu_count: 4
         shell: bash
         run: |
           sudo pkg install -y cmake
