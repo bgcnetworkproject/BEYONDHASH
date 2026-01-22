@@ -36,7 +36,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "program.hpp"
 #include "reciprocal.h"
 #include "virtual_memory.h"
-
+#include "cpu.hpp"
+#include "jit_compiler_rv64_vector_static.h"
+#include "jit_compiler_rv64_vector.h"
 
 namespace {
 #define HANDLER_ARGS randomx::CompilerState& state, randomx::Instruction isn, int i
@@ -605,25 +607,55 @@ namespace randomx {
 		entryProgram = state.code + LiteralPoolSize + sizeDataInit;
 		//jal x1, SuperscalarHash
 		emitJump(state, ReturnReg, LiteralPoolSize + offsetFixDataCall, SuperScalarHashOffset);
+
+		if (randomx::cpu.hasRVV() && (randomx::cpu.getRVV_Length() >= 128)) {
+			vectorRegisterLength = randomx::cpu.getRVV_Length();
+
+			vectorCodeSize = ((uint8_t*)randomx_riscv64_vector_code_end) - ((uint8_t*)randomx_riscv64_vector_code_begin);
+			vectorCode = static_cast<uint8_t*>(allocMemoryPages(vectorCodeSize));
+
+			if (vectorCode) {
+				memcpy(vectorCode, reinterpret_cast<uint8_t*>(randomx_riscv64_vector_code_begin), vectorCodeSize);
+				entryProgramVector = vectorCode + (((uint8_t*)randomx_riscv64_vector_program_begin) - ((uint8_t*)randomx_riscv64_vector_code_begin));
+				entryDataInitVector = vectorCode + (((uint8_t*)randomx_riscv64_vector_sshash_dataset_init) - ((uint8_t*)randomx_riscv64_vector_code_begin));
+			}
+		}
 	}
 
 	JitCompilerRV64::~JitCompilerRV64() {
 		freePagedMemory(state.code, CodeSize);
+		if (vectorCode) {
+			freePagedMemory(vectorCode, vectorCodeSize);
+		}
 	}
 
 	void JitCompilerRV64::enableAll() {
 		setPagesRWX(entryDataInit, ExecutableSize);
+		if (vectorCode) {
+			setPagesRWX(vectorCode, vectorCodeSize);
+		}
 	}
 
 	void JitCompilerRV64::enableWriting() {
 		setPagesRW(entryDataInit, ExecutableSize);
+		if (vectorCode) {
+			setPagesRW(vectorCode, vectorCodeSize);
+		}
 	}
 
 	void JitCompilerRV64::enableExecution() {
 		setPagesRX(entryDataInit, ExecutableSize);
+		if (vectorCode) {
+			setPagesRX(vectorCode, vectorCodeSize);
+		}
 	}
 
 	void JitCompilerRV64::generateProgram(Program& prog, ProgramConfiguration& pcfg) {
+		if (vectorCode) {
+			generateProgramVectorRV64(vectorCode, prog, pcfg, instMap, nullptr, 0);
+			return;
+		}
+
 		emitProgramPrefix(state, prog, pcfg);
 		int32_t fixPos = state.codePos;
 		state.emit(codeDataRead, sizeDataRead);
@@ -634,6 +666,11 @@ namespace randomx {
 	}
 
 	void JitCompilerRV64::generateProgramLight(Program& prog, ProgramConfiguration& pcfg, uint32_t datasetOffset) {
+		if (vectorCode) {
+			generateProgramVectorRV64(vectorCode, prog, pcfg, instMap, entryDataInit, datasetOffset);
+			return;
+		}
+
 		emitProgramPrefix(state, prog, pcfg);
 		int32_t fixPos = state.codePos;
 		state.emit(codeDataReadLight, sizeDataReadLight);
@@ -654,6 +691,11 @@ namespace randomx {
 	}
 
 	void JitCompilerRV64::generateSuperscalarHash(SuperscalarProgram programs[RANDOMX_CACHE_ACCESSES], std::vector<uint64_t>& reciprocalCache) {
+		if (vectorCode) {
+			entryDataInitVector = generateDatasetInitVectorRV64(vectorCode, programs, RANDOMX_CACHE_ACCESSES, reciprocalCache);
+			// No return here because we also need the scalar dataset init function for the light mode
+		}
+
 		state.codePos = SuperScalarHashOffset;
 		state.rcpCount = 0;
 		state.emit(codeSshInit, sizeSshInit);
@@ -1172,4 +1214,42 @@ namespace {
 		INST_HANDLE1(ISTORE)
 		INST_HANDLE1(NOP)
 	};
+
+#undef INST_HANDLE1
+#undef INST_HANDLE2
 }
+
+#define INST_HANDLE(x) REPN(static_cast<uint8_t>(randomx::InstructionType::x), WT(x))
+
+alignas(64) uint8_t randomx::JitCompilerRV64::instMap[256] = {
+	INST_HANDLE(IADD_RS)
+	INST_HANDLE(IADD_M)
+	INST_HANDLE(ISUB_R)
+	INST_HANDLE(ISUB_M)
+	INST_HANDLE(IMUL_R)
+	INST_HANDLE(IMUL_M)
+	INST_HANDLE(IMULH_R)
+	INST_HANDLE(IMULH_M)
+	INST_HANDLE(ISMULH_R)
+	INST_HANDLE(ISMULH_M)
+	INST_HANDLE(IMUL_RCP)
+	INST_HANDLE(INEG_R)
+	INST_HANDLE(IXOR_R)
+	INST_HANDLE(IXOR_M)
+	INST_HANDLE(IROR_R)
+	INST_HANDLE(IROL_R)
+	INST_HANDLE(ISWAP_R)
+	INST_HANDLE(FSWAP_R)
+	INST_HANDLE(FADD_R)
+	INST_HANDLE(FADD_M)
+	INST_HANDLE(FSUB_R)
+	INST_HANDLE(FSUB_M)
+	INST_HANDLE(FSCAL_R)
+	INST_HANDLE(FMUL_R)
+	INST_HANDLE(FDIV_M)
+	INST_HANDLE(FSQRT_R)
+	INST_HANDLE(CBRANCH)
+	INST_HANDLE(CFROUND)
+	INST_HANDLE(ISTORE)
+	INST_HANDLE(NOP)
+};

@@ -194,7 +194,21 @@ extern "C" {
 		assert(cache != nullptr);
 		assert(startItem < DatasetItemCount && itemCount <= DatasetItemCount);
 		assert(startItem + itemCount <= DatasetItemCount);
-		cache->datasetInit(cache, dataset->memory + startItem * randomx::CacheLineSize, startItem, startItem + itemCount);
+
+		if (itemCount < 4) {
+			uint8_t buf[randomx::CacheLineSize * 4];
+			cache->datasetInit(cache, buf, startItem, startItem + 4);
+			memcpy(dataset->memory + startItem * randomx::CacheLineSize, buf, itemCount * randomx::CacheLineSize);
+		}
+		else if ((itemCount % 4) == 0) {
+			cache->datasetInit(cache, dataset->memory + startItem * randomx::CacheLineSize, startItem, startItem + itemCount);
+		}
+		else {
+			cache->datasetInit(cache, dataset->memory + startItem * randomx::CacheLineSize, startItem, startItem + itemCount - (itemCount % 4));
+
+			startItem += itemCount - 4;
+			cache->datasetInit(cache, dataset->memory + startItem * randomx::CacheLineSize, startItem, startItem + 4);
+		}
 	}
 
 	void *randomx_get_dataset_memory(randomx_dataset *dataset) {

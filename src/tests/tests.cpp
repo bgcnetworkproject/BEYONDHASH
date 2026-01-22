@@ -156,7 +156,7 @@ int main() {
 #else
 		jit.enableAll();
 #endif
-		uint64_t datasetItem[8];
+		uint64_t datasetItem[32] = {};
 		jit.getDatasetInitFunc()(cache, (uint8_t*)&datasetItem, 0, 1);
 		assert(datasetItem[0] == 0x680588a85ae222db);
 		jit.getDatasetInitFunc()(cache, (uint8_t*)&datasetItem, 10000000, 10000001);
