@@ -316,7 +316,7 @@ if(ARCH_ID STREQUAL "riscv64")
     endif()
   endif()
 
-  set_source_files_properties(src/jit_compiler_rv64_vector_static.S PROPERTIES COMPILE_FLAGS "-march=${RV64_VECTOR_FILE_ARCH}")
+  set_source_files_properties(src/jit_compiler_rv64_vector_static.S PROPERTIES COMPILE_FLAGS "-march=${RV64_VECTOR_FILE_ARCH}_zvkned")
   set_source_files_properties(src/aes_hash_rv64_vector.cpp PROPERTIES COMPILE_FLAGS "-O3 -march=${RV64_VECTOR_FILE_ARCH}")
   set_source_files_properties(src/aes_hash_rv64_zvkned.cpp PROPERTIES COMPILE_FLAGS "-O3 -march=${RV64_VECTOR_FILE_ARCH}_zvkned")
 endif()
@@ -380,5 +380,13 @@ if(NOT HAVE_CXX_ATOMICS)
   target_link_libraries(randomx-benchmark
     PRIVATE "atomic")
 endif()
+
+check_cxx_source_compiles("
+#include <stdlib.h>
+int main() {
+  void* p;
+  return posix_memalign(&p, 64, 64);
+}" HAVE_POSIX_MEMALIGN)
+
 set_property(TARGET randomx-benchmark PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET randomx-benchmark PROPERTY CXX_STANDARD 11)
